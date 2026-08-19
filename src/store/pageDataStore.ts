@@ -15,6 +15,7 @@ export interface Document extends PageMetadata {
     id: string;
     editorState: string | null;
     parentId: string | null;
+    type?: 'ref-arch' | 'article';
     children?: Document[];
     updatedAt?: string | null;
     // Remote sync status
@@ -46,7 +47,7 @@ interface PageDataState {
     getRootDocumentId: (docId: string) => string | null;
 
     // Local actions
-    addDocument: (metadata: PageMetadata, parentId?: string | null) => void;
+    addDocument: (metadata: PageMetadata, parentId?: string | null, type?: 'ref-arch' | 'article') => void;
     updateDocument: (id: string, updates: Partial<Document>, skipRemoteSync?: boolean) => void;
     setActiveDocumentId: (id: string | null) => void;
     openDocument: (id: string) => void;
@@ -59,7 +60,7 @@ interface PageDataState {
     fetchDocuments: () => Promise<void>;
     syncDocument: (id: string) => Promise<void>;
     syncOperations: (documentId: string, operations: Operation[]) => Promise<string | null>;
-    createRemoteDocument: (metadata: PageMetadata, parentId?: string | null) => Promise<Document | null>;
+    createRemoteDocument: (metadata: PageMetadata, parentId?: string | null, type?: 'ref-arch' | 'article') => Promise<Document | null>;
     deleteRemoteDocument: (id: string) => Promise<void>;
 }
 
@@ -527,7 +528,7 @@ export const usePageDataStore = create<PageDataState>()(
             },
 
             // Create a new document on remote
-            createRemoteDocument: async (metadata, parentId = null) => {
+            createRemoteDocument: async (metadata, parentId = null, type) => {
                 const { backendUrl, authToken, openDocumentIds } = get();
                 if (!backendUrl || !authToken) {
                     // Fallback to local-only
@@ -536,6 +537,7 @@ export const usePageDataStore = create<PageDataState>()(
                         id: uuidv4(),
                         editorState: null,
                         parentId,
+                        type,
                         _synced: false,
                     };
                     // If it's a root document, add to open tabs
@@ -667,9 +669,9 @@ export const usePageDataStore = create<PageDataState>()(
             },
 
             // Local-only add (for backwards compatibility)
-            addDocument: (metadata, parentId = null) => {
+            addDocument: (metadata, parentId = null, type) => {
                 const { createRemoteDocument } = get();
-                createRemoteDocument(metadata, parentId);
+                createRemoteDocument(metadata, parentId, type);
             },
 
             // Update document locally and optionally trigger sync

@@ -6,6 +6,8 @@ import { useHistory } from '@docusaurus/router';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import { usePageDataStore, PageMetadata } from '@site/src/store/pageDataStore';
 import MetadataFormDialog from '@site/src/components/MetaFormDialog';
+import ContentTypeDialog, { ContentType } from '@site/src/components/ContentTypeDialog';
+import ArticleFormDialog, { ArticleMetadata } from '@site/src/components/ArticleFormDialog';
 import { useAuth } from '@site/src/context/AuthContext';
 import Header from '@site/src/components/CustomHeader/Header';
 import { BusyIndicator, Button, Card, Dialog, FlexBox, Icon, Text, Title } from '@ui5/webcomponents-react';
@@ -28,6 +30,24 @@ function EditorComponent({ onAddNew, onEditMeta }: { onAddNew: (parentId?: strin
     );
 }
 
+function ArticleEditorComponent({ onAddNew, onEditMeta }: { onAddNew: (parentId?: string | null) => void; onEditMeta?: () => void }) {
+    const activeDocumentId = usePageDataStore((state) => state.activeDocumentId);
+
+    if (!activeDocumentId) {
+        return <div className={styles.noDocumentSelected}>Please select or create a document.</div>;
+    }
+
+    return (
+        <BrowserOnly>
+            {() => {
+                const ArticleEditor = require('@site/src/components/ArticleEditor').default;
+                return <ArticleEditor key={activeDocumentId} onAddNew={onAddNew} onEditMeta={onEditMeta} />;
+            }}
+        </BrowserOnly>
+    );
+}
+
+
 const initialPageData: PageMetadata = {
     title: '',
     tags: [],
@@ -36,11 +56,15 @@ const initialPageData: PageMetadata = {
 };
 
 function AuthenticatedQuickStartView() {
+    const [isContentTypeOpen, setIsContentTypeOpen] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isArticleFormOpen, setIsArticleFormOpen] = useState(false);
+    const [articleFormData, setArticleFormData] = useState<ArticleMetadata>({ title: '' });
     const [isEditMode, setIsEditMode] = useState(false);
     const [newDocData, setNewDocData] = useState<PageMetadata>(initialPageData);
     const [currentParentId, setCurrentParentId] = useState<string | null>(null);
     const { documents, addDocument, setBackendConfig, fetchDocuments, isLoading, isCreating, getActiveDocument, updateDocument } = usePageDataStore();
+    const activeDocument = usePageDataStore((state) => state.documents.find((d) => d.id === state.activeDocumentId) ?? null);
     const history = useHistory();
     const { siteConfig } = useDocusaurusContext();
     const baseUrl = siteConfig.baseUrl;
@@ -68,8 +92,50 @@ function AuthenticatedQuickStartView() {
         setNewDocData(newDocWithAuthor);
         setCurrentParentId(parentId);
         setIsEditMode(false);
-        setIsModalOpen(true);
+        // Sub-page creation always produces a RA sub-page — skip the type chooser
+        if (parentId !== null) {
+            setIsModalOpen(true);
+        } else if (users.github?.isSapEmployee) {
+            setIsContentTypeOpen(true);
+        } else {
+            setIsModalOpen(true);
+        }
     }, [users.github]);
+
+    const handleContentTypeSelect = useCallback((type: ContentType) => {
+        setIsContentTypeOpen(false);
+        if (type === 'ref-arch') {
+            setIsModalOpen(true);
+        } else if (type === 'article') {
+            setArticleFormData({ title: '' });
+            setIsArticleFormOpen(true);
+        }
+    }, []);
+
+    const handleArticleCreate = useCallback(() => {
+        addDocument({
+            title: articleFormData.title,
+            description: articleFormData.description || '',
+            tags: [],
+            authors: users.github ? [users.github.username] : [],
+            contributors: users.github ? [users.github.username] : [],
+        }, null, 'article');
+        setIsArticleFormOpen(false);
+    }, [articleFormData, users.github, addDocument]);
+
+    const handleArticleCancel = useCallback(() => {
+        setIsArticleFormOpen(false);
+        if (documents.length === 0) {
+            history.push(baseUrl);
+        }
+    }, [documents.length, history, baseUrl]);
+
+    const handleContentTypeCancel = useCallback(() => {
+        setIsContentTypeOpen(false);
+        if (documents.length === 0) {
+            history.push(baseUrl);
+        }
+    }, [documents.length, history, baseUrl]);
 
     const handleEditMeta = useCallback(() => {
         const activeDoc = getActiveDocument();
@@ -129,13 +195,25 @@ function AuthenticatedQuickStartView() {
     if (isCreating) {
         return (
             <div className={styles.initializingContainer}>
-                <BusyIndicator active size="L" text="Creating Reference Architecture..." />
+                <BusyIndicator active size="L" text="Creating document..." />
             </div>
         );
     }
 
     return (
         <>
+            <ContentTypeDialog
+                open={isContentTypeOpen}
+                onSelect={handleContentTypeSelect}
+                onCancel={handleContentTypeCancel}
+            />
+            <ArticleFormDialog
+                open={isArticleFormOpen}
+                initialData={articleFormData}
+                onDataChange={(updates) => setArticleFormData((prev) => ({ ...prev, ...updates }))}
+                onSave={handleArticleCreate}
+                onCancel={handleArticleCancel}
+            />
             <MetadataFormDialog
                 open={isModalOpen}
                 initialData={newDocData}
@@ -145,7 +223,10 @@ function AuthenticatedQuickStartView() {
                 isEditMode={isEditMode}
             />
             <main className={styles.pageContainer}>
-                <EditorComponent onAddNew={handleAddNew} onEditMeta={handleEditMeta} />
+                {activeDocument?.type === 'article'
+                    ? <ArticleEditorComponent onAddNew={handleAddNew} onEditMeta={handleEditMeta} />
+                    : <EditorComponent onAddNew={handleAddNew} onEditMeta={handleEditMeta} />
+                }
             </main>
         </>
     );
