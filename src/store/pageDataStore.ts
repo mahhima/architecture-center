@@ -590,6 +590,7 @@ export const usePageDataStore = create<PageDataState>()(
                         description: remoteDoc.description || '',
                         parentId: remoteDoc.parent_ID || null,
                         editorState: remoteDoc.editorState || null,
+                        type,
                         authors: remoteDoc.author ? [remoteDoc.author.username] : metadata.authors,
                         contributors: remoteDoc.contributors?.map((c: any) => c.user?.username).filter(Boolean) || [],
                         tags: remoteDoc.tags?.map((t: any) => t.tag?.code).filter(Boolean) || [],

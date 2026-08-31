@@ -13,7 +13,7 @@ import Header from '@site/src/components/CustomHeader/Header';
 import { BusyIndicator, Button, Card, Dialog, FlexBox, Icon, Text, Title } from '@ui5/webcomponents-react';
 import useIsMobile from '@site/src/hooks/useIsMobile';
 
-function EditorComponent({ onAddNew, onEditMeta }: { onAddNew: (parentId?: string | null) => void; onEditMeta?: () => void }) {
+function EditorComponent({ onAddNew, onEditMeta, onAddNewArticle }: { onAddNew: (parentId?: string | null) => void; onEditMeta?: () => void; onAddNewArticle?: () => void }) {
     const activeDocumentId = usePageDataStore((state) => state.activeDocumentId);
 
     if (!activeDocumentId) {
@@ -24,24 +24,7 @@ function EditorComponent({ onAddNew, onEditMeta }: { onAddNew: (parentId?: strin
         <BrowserOnly>
             {() => {
                 const Editor = require('@site/src/components/Editor').default;
-                return <Editor key={activeDocumentId} onAddNew={onAddNew} onEditMeta={onEditMeta} />;
-            }}
-        </BrowserOnly>
-    );
-}
-
-function ArticleEditorComponent({ onAddNew, onEditMeta }: { onAddNew: (parentId?: string | null) => void; onEditMeta?: () => void }) {
-    const activeDocumentId = usePageDataStore((state) => state.activeDocumentId);
-
-    if (!activeDocumentId) {
-        return <div className={styles.noDocumentSelected}>Please select or create a document.</div>;
-    }
-
-    return (
-        <BrowserOnly>
-            {() => {
-                const ArticleEditor = require('@site/src/components/ArticleEditor').default;
-                return <ArticleEditor key={activeDocumentId} onAddNew={onAddNew} onEditMeta={onEditMeta} />;
+                return <Editor key={activeDocumentId} onAddNew={onAddNew} onEditMeta={onEditMeta} onAddNewArticle={onAddNewArticle} />;
             }}
         </BrowserOnly>
     );
@@ -64,7 +47,6 @@ function AuthenticatedQuickStartView() {
     const [newDocData, setNewDocData] = useState<PageMetadata>(initialPageData);
     const [currentParentId, setCurrentParentId] = useState<string | null>(null);
     const { documents, addDocument, setBackendConfig, fetchDocuments, isLoading, isCreating, getActiveDocument, updateDocument } = usePageDataStore();
-    const activeDocument = usePageDataStore((state) => state.documents.find((d) => d.id === state.activeDocumentId) ?? null);
     const history = useHistory();
     const { siteConfig } = useDocusaurusContext();
     const baseUrl = siteConfig.baseUrl;
@@ -92,15 +74,16 @@ function AuthenticatedQuickStartView() {
         setNewDocData(newDocWithAuthor);
         setCurrentParentId(parentId);
         setIsEditMode(false);
-        // Sub-page creation always produces a RA sub-page — skip the type chooser
-        if (parentId !== null) {
-            setIsModalOpen(true);
-        } else if (users.github?.isSapEmployee) {
+        // First-time creation (no documents yet) for SAP employees shows the
+        // 2-option chooser (Ref Arch vs Article). Once documents exist, the split
+        // sidebar's dedicated "New Ref Arch" / "New Article" buttons go straight to
+        // their specific form — so this always creates a Reference Architecture.
+        if (parentId === null && documents.length === 0 && users.github?.isSapEmployee) {
             setIsContentTypeOpen(true);
         } else {
             setIsModalOpen(true);
         }
-    }, [users.github]);
+    }, [users.github, documents.length]);
 
     const handleContentTypeSelect = useCallback((type: ContentType) => {
         setIsContentTypeOpen(false);
@@ -110,6 +93,13 @@ function AuthenticatedQuickStartView() {
             setArticleFormData({ title: '' });
             setIsArticleFormOpen(true);
         }
+    }, []);
+
+    // Opens the Article creation form directly (used by the "Article +" button
+    // in the split sidebar).
+    const handleAddNewArticle = useCallback(() => {
+        setArticleFormData({ title: '' });
+        setIsArticleFormOpen(true);
     }, []);
 
     const handleArticleCreate = useCallback(() => {
@@ -223,10 +213,7 @@ function AuthenticatedQuickStartView() {
                 isEditMode={isEditMode}
             />
             <main className={styles.pageContainer}>
-                {activeDocument?.type === 'article'
-                    ? <ArticleEditorComponent onAddNew={handleAddNew} onEditMeta={handleEditMeta} />
-                    : <EditorComponent onAddNew={handleAddNew} onEditMeta={handleEditMeta} />
-                }
+                <EditorComponent onAddNew={handleAddNew} onEditMeta={handleEditMeta} onAddNewArticle={users.github?.isSapEmployee ? handleAddNewArticle : undefined} />
             </main>
         </>
     );

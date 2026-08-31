@@ -32,6 +32,30 @@
     transform: translateY(0);
 }
 
+.dropdownHeader {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 6px;
+    margin-bottom: 4px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--ifm-font-color-base);
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    text-align: left;
+    transition: background-color 0.15s ease;
+    border-radius: 8px;
+}
+
+.dropdownHeader:hover {
+    background-color: var(--ifm-color-emphasis-200);
+}
+
 .documentsList {
     flex: 1;
     overflow-y: auto;

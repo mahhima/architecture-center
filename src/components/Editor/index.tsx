@@ -54,6 +54,7 @@ interface TransformedDocument {
   id: string;
   editorState: string;
   parentId: string | null;
+  type?: 'ref-arch' | 'article';
   children: TransformedDocument[];
   metadata: {
     title: string;
@@ -69,6 +70,7 @@ const transformTreeForBackend = (doc: Document): TransformedDocument => {
     id: doc.id,
     editorState: doc.editorState ? convertToLexicalFormat(doc.editorState) : '',
     parentId: doc.parentId,
+    type: doc.type,
     children: doc.children ? doc.children.map(transformTreeForBackend) : [],
     metadata: {
       title: doc.title,
@@ -121,6 +123,7 @@ function EditorContent({ containerRef, readOnly }: EditorContentProps) {
 interface EditorProps {
   onAddNew: (parentId?: string | null) => void;
   onEditMeta?: () => void;
+  onAddNewArticle?: () => void;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -152,7 +155,7 @@ interface PublishStatus {
   pullRequestUrl: string | null;
 }
 
-const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta }) => {
+const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta, onAddNewArticle }) => {
   const { getActiveDocument, lastSaveTimestamp, deleteDocument, documents, resetStore, updateDocument, isSyncing, syncError, syncOperations } =
     usePageDataStore();
   const { token, user } = useAuth();
@@ -597,7 +600,7 @@ const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta }) => {
     <EditorContext.Provider value={contextValue}>
       <div className={`${styles.editorPageWrapper} ${colorMode === 'dark' ? styles.darkMode : ''}`}>
         <div className={styles.navColumn}>
-          <PageTabs onAddNew={onAddNew} />
+          <PageTabs onAddNew={onAddNew} onAddNewArticle={onAddNewArticle} />
         </div>
         <div className={styles.mainAndTocWrapper}>
           <div className={styles.editorColumn} ref={editorColumnRef}>
