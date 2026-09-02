@@ -80,3 +80,12 @@ vikas-thimmiaha:
     socials:
         github: vikas-thimmiaha
         linkedin: vikas-dodera-thimmiaha-34b500135
+
+mahhima:
+    name: 'Mahima '
+    title: Scholar
+    url: https://github.com/mahhima
+    image_url: https://github.com/mahhima.png
+    page: true
+    socials:
+        github: mahhima
