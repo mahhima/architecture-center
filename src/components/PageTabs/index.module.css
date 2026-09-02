@@ -32,6 +32,17 @@
     transform: translateY(0);
 }
 
+.newRefArchButtonLocked {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: var(--ifm-color-emphasis-300);
+}
+
+.newRefArchButtonLocked:hover {
+    opacity: 0.65;
+    transform: none;
+}
+
 .dropdownHeader {
     display: flex;
     align-items: center;

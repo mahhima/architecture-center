@@ -6,11 +6,13 @@ export type ContentType = 'ref-arch' | 'article';
 
 interface ContentTypeDialogProps {
     open: boolean;
+    isSapUser: boolean;
     onSelect: (type: ContentType) => void;
+    onSapLogin: () => void;
     onCancel: () => void;
 }
 
-export default function ContentTypeDialog({ open, onSelect, onCancel }: ContentTypeDialogProps): JSX.Element {
+export default function ContentTypeDialog({ open, isSapUser, onSelect, onSapLogin, onCancel }: ContentTypeDialogProps): JSX.Element {
     return (
         <Dialog
             open={open}
@@ -32,13 +34,32 @@ export default function ContentTypeDialog({ open, onSelect, onCancel }: ContentT
                         A proven blueprint showcasing how SAP offerings come together to deliver business value
                     </div>
                 </button>
-                <button className={styles.typeCard} onClick={() => onSelect('article')}>
-                    <Icon name="document-text" className={styles.cardIcon} />
-                    <div className={styles.cardTitle}>Article</div>
-                    <div className={styles.cardDescription}>
-                        Share insights, best practices, or technical guides with the community
-                    </div>
-                </button>
+
+                {isSapUser ? (
+                    <button className={styles.typeCard} onClick={() => onSelect('article')}>
+                        <Icon name="document-text" className={styles.cardIcon} />
+                        <div className={styles.cardTitle}>Article</div>
+                        <div className={styles.cardDescription}>
+                            Share insights, best practices, or technical guides with the community
+                        </div>
+                    </button>
+                ) : (
+                    <button
+                        className={`${styles.typeCard} ${styles.typeCardLocked}`}
+                        onClick={onSapLogin}
+                        title="Login with SAP to access"
+                    >
+                        <div className={styles.lockBadge}>
+                            <Icon name="locked" className={styles.lockIcon} />
+                            <span>Login with SAP to access</span>
+                        </div>
+                        <Icon name="document-text" className={styles.cardIcon} />
+                        <div className={styles.cardTitle}>Article</div>
+                        <div className={styles.cardDescription}>
+                            Share insights, best practices, or technical guides with the community
+                        </div>
+                    </button>
+                )}
             </div>
         </Dialog>
     );

@@ -7,9 +7,10 @@ import styles from './index.module.css';
 interface PageTabsProps {
     onAddNew?: (parentId: string | null) => void;
     onAddNewArticle?: () => void;
+    onSapLogin?: () => void;
 }
 
-const PageTabs: React.FC<PageTabsProps> = ({ onAddNew, onAddNewArticle }) => {
+const PageTabs: React.FC<PageTabsProps> = ({ onAddNew, onAddNewArticle, onSapLogin }) => {
     const { documents, activeDocumentId, openDocument } = usePageDataStore();
 
     const [raOpen, setRaOpen] = useState(true);
@@ -133,18 +134,18 @@ const PageTabs: React.FC<PageTabsProps> = ({ onAddNew, onAddNewArticle }) => {
             )}
 
             {/* ── Articles ── */}
-            {onAddNewArticle && (
-                <>
-                    <button
-                        className={styles.dropdownHeader}
-                        onClick={() => setArticlesOpen((o) => !o)}
-                        title={articlesOpen ? 'Collapse' : 'Expand'}
-                    >
-                        {articlesOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                        <span>Articles</span>
-                    </button>
-                    {articlesOpen && (
-                        <>
+            <>
+                <button
+                    className={styles.dropdownHeader}
+                    onClick={() => setArticlesOpen((o) => !o)}
+                    title={articlesOpen ? 'Collapse' : 'Expand'}
+                >
+                    {articlesOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <span>Articles</span>
+                </button>
+                {articlesOpen && (
+                    <>
+                        {onAddNewArticle ? (
                             <button
                                 className={styles.newRefArchButton}
                                 onClick={onAddNewArticle}
@@ -153,11 +154,20 @@ const PageTabs: React.FC<PageTabsProps> = ({ onAddNew, onAddNewArticle }) => {
                                 <span>New Article</span>
                                 <Plus size={18} />
                             </button>
-                            {renderDocList(articleDocuments, 'No articles yet.')}
-                        </>
-                    )}
-                </>
-            )}
+                        ) : (
+                            <button
+                                className={`${styles.newRefArchButton} ${styles.newRefArchButtonLocked}`}
+                                onClick={onSapLogin}
+                                title="Login with SAP to access"
+                            >
+                                <span>New Article</span>
+                                <Plus size={18} />
+                            </button>
+                        )}
+                        {renderDocList(articleDocuments, 'No articles yet.')}
+                    </>
+                )}
+            </>
         </div>
     );
 };

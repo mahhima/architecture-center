@@ -54,7 +54,7 @@ interface ArticleHeaderProps {
 export default function ArticleHeader({ readOnly = false, onEditMeta }: ArticleHeaderProps) {
     const { getActiveDocument, updateDocument, lastSaveTimestamp } = usePageDataStore();
     const activeDocument = getActiveDocument();
-    const globalTagsData = useGlobalData()['docusaurus-tags']['default']['tags'] as Record<string, TagData> | undefined;
+    const globalTagsData = (useGlobalData() as Record<string, any>)['docusaurus-tags']?.['default']?.['tags'] as Record<string, TagData> | undefined;
 
     // Use lastSaveTimestamp from store, fallback to document's updatedAt
     const displayTimestamp = lastSaveTimestamp || activeDocument?.updatedAt || null;

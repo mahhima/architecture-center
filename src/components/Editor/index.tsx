@@ -63,10 +63,18 @@ interface TransformedDocument {
     contributors: string[];
     description: string;
   };
+  // Article-only: sent when the author is not yet in news/authors.yml so the
+  // backend can upsert them. Absent for Reference Architectures and resolved authors.
+  newAuthor?: {
+    username: string;
+    name: string;
+    title: string;
+    linkedin?: string;
+  };
 }
 
 const transformTreeForBackend = (doc: Document): TransformedDocument => {
-  return {
+  const transformed: TransformedDocument = {
     id: doc.id,
     editorState: doc.editorState ? convertToLexicalFormat(doc.editorState) : '',
     parentId: doc.parentId,
@@ -77,9 +85,21 @@ const transformTreeForBackend = (doc: Document): TransformedDocument => {
       tags: doc.tags ?? [],
       authors: doc.authors,
       contributors: doc.contributors ?? [],
-      description: doc.description || 'This is a default description.',
+      description: doc.description || '',
     },
   };
+
+  // Attach new-author details only for a not-yet-registered article author.
+  if (doc.type === 'article' && !doc.authorResolved && doc.authorName && doc.authors?.[0]) {
+    transformed.newAuthor = {
+      username: doc.authors[0],
+      name: doc.authorName,
+      title: doc.authorTitle ?? '',
+      ...(doc.authorLinkedin ? { linkedin: doc.authorLinkedin } : {}),
+    };
+  }
+
+  return transformed;
 };
 
 const buildBreadcrumbPath = (docId: string | null, allDocs: Document[]): Document[] => {
@@ -124,30 +144,12 @@ interface EditorProps {
   onAddNew: (parentId?: string | null) => void;
   onEditMeta?: () => void;
   onAddNewArticle?: () => void;
+  onSapLogin?: () => void;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Format timestamp to human readable format
-const formatTimestamp = (timestamp: string | null): string => {
-  if (!timestamp) return '';
-  try {
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return timestamp;
-
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-
-    return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
-  } catch {
-    return timestamp;
-  }
-};
-
 interface PublishStatus {
   stage: PublishStage;
   error: string | null;
@@ -155,8 +157,8 @@ interface PublishStatus {
   pullRequestUrl: string | null;
 }
 
-const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta, onAddNewArticle }) => {
-  const { getActiveDocument, lastSaveTimestamp, deleteDocument, documents, resetStore, updateDocument, isSyncing, syncError, syncOperations } =
+const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta, onAddNewArticle, onSapLogin }) => {
+  const { getActiveDocument, deleteDocument, documents, updateDocument, isSyncing, syncError, syncOperations } =
     usePageDataStore();
   const { token, user } = useAuth();
   const { colorMode } = useColorMode();
@@ -469,18 +471,13 @@ const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta, onAddNewArticle }
       }, 100);
       return () => clearTimeout(timeoutId);
     }
+    return undefined;
   }, [token, loadAssetsForState]);
 
   const breadcrumbPath = useMemo(
     () => buildBreadcrumbPath(activeDocument?.id ?? null, documents),
     [activeDocument, documents]
   );
-
-  const handleContributorsUpdate = (updatedContributors: string[]) => {
-    if (activeDocument) {
-      updateDocument(activeDocument.id, { contributors: updatedContributors });
-    }
-  };
 
   const handleSubmit = async () => {
     setIsLoading(true);
@@ -600,7 +597,7 @@ const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta, onAddNewArticle }
     <EditorContext.Provider value={contextValue}>
       <div className={`${styles.editorPageWrapper} ${colorMode === 'dark' ? styles.darkMode : ''}`}>
         <div className={styles.navColumn}>
-          <PageTabs onAddNew={onAddNew} onAddNewArticle={onAddNewArticle} />
+          <PageTabs onAddNew={onAddNew} onAddNewArticle={onAddNewArticle} onSapLogin={onSapLogin} />
         </div>
         <div className={styles.mainAndTocWrapper}>
           <div className={styles.editorColumn} ref={editorColumnRef}>
