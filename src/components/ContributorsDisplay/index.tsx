@@ -58,7 +58,7 @@ const ContributorsDisplay: React.FC<ContributorsDisplayProps> = ({ contributors,
         }
     };
 
-    const handleContributorInput = (event: React.ChangeEvent<HTMLInputElement> & { target: { value: string } }) => {
+    const handleContributorInput = (event: { target: { value: string } }) => {
         const query = event.target.value || '';
         setContributorSearchQuery(query);
 
@@ -149,8 +149,8 @@ const ContributorsDisplay: React.FC<ContributorsDisplayProps> = ({ contributors,
                         filter="None"
                         placeholder="Search or add a GitHub username..."
                         value={contributorSearchQuery}
-                        onInput={handleContributorInput}
-                        onSelectionChange={handleContributorSelection}
+                        onInput={handleContributorInput as any}
+                        onSelectionChange={handleContributorSelection as any}
                         onKeyDown={handleContributorKeyDown}
                         disabled={!backendUrl}
                         className={styles.multiComboBox}
@@ -163,7 +163,9 @@ const ContributorsDisplay: React.FC<ContributorsDisplayProps> = ({ contributors,
                                 selected={editingContributors.includes(user.login)}
                             >
                                 <div className={styles.comboItem}>
-                                    <Avatar size="XS" image={`https://github.com/${user.login}.png`} />
+                                    <Avatar size={"XS" as any}>
+                                        <img src={`https://github.com/${user.login}.png`} alt={user.login} />
+                                    </Avatar>
                                     <span>{user.login}</span>
                                 </div>
                             </MultiComboBoxItem>

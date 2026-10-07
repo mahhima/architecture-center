@@ -17,11 +17,44 @@
     background: var(--sapBaseColor, #fff);
     cursor: pointer;
     transition: border-color 0.15s, box-shadow 0.15s;
+    position: relative;
 }
 
 .typeCard:hover {
     border-color: var(--sapHighlightColor, #0070f2);
     box-shadow: 0 2px 8px rgba(0, 112, 242, 0.12);
+}
+
+.typeCardLocked {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.typeCardLocked:hover {
+    border-color: var(--sapField_BorderColor, #bcc3ca);
+    box-shadow: none;
+    opacity: 0.75;
+}
+
+.lockBadge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--sapNeutralBackground, #f5f6f7);
+    border: 1px solid var(--sapField_BorderColor, #bcc3ca);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    color: var(--sapContent_LabelColor, #6a6d70);
+    white-space: nowrap;
+}
+
+.lockIcon {
+    font-size: 10px;
+    color: var(--sapContent_LabelColor, #6a6d70);
 }
 
 .cardIcon {

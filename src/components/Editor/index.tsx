@@ -54,6 +54,7 @@ interface TransformedDocument {
   id: string;
   editorState: string;
   parentId: string | null;
+  type?: 'ref-arch' | 'article';
   children: TransformedDocument[];
   metadata: {
     title: string;
@@ -62,22 +63,43 @@ interface TransformedDocument {
     contributors: string[];
     description: string;
   };
+  // Article-only: sent when the author is not yet in news/authors.yml so the
+  // backend can upsert them. Absent for Reference Architectures and resolved authors.
+  newAuthor?: {
+    username: string;
+    name: string;
+    title: string;
+    linkedin?: string;
+  };
 }
 
 const transformTreeForBackend = (doc: Document): TransformedDocument => {
-  return {
+  const transformed: TransformedDocument = {
     id: doc.id,
     editorState: doc.editorState ? convertToLexicalFormat(doc.editorState) : '',
     parentId: doc.parentId,
+    type: doc.type,
     children: doc.children ? doc.children.map(transformTreeForBackend) : [],
     metadata: {
       title: doc.title,
       tags: doc.tags ?? [],
       authors: doc.authors,
       contributors: doc.contributors ?? [],
-      description: doc.description || 'This is a default description.',
+      description: doc.description || '',
     },
   };
+
+  // Attach new-author details only for a not-yet-registered article author.
+  if (doc.type === 'article' && !doc.authorResolved && doc.authorName && doc.authors?.[0]) {
+    transformed.newAuthor = {
+      username: doc.authors[0],
+      name: doc.authorName,
+      title: doc.authorTitle ?? '',
+      ...(doc.authorLinkedin ? { linkedin: doc.authorLinkedin } : {}),
+    };
+  }
+
+  return transformed;
 };
 
 const buildBreadcrumbPath = (docId: string | null, allDocs: Document[]): Document[] => {
@@ -121,30 +143,13 @@ function EditorContent({ containerRef, readOnly }: EditorContentProps) {
 interface EditorProps {
   onAddNew: (parentId?: string | null) => void;
   onEditMeta?: () => void;
+  onAddNewArticle?: () => void;
+  onSapLogin?: () => void;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Format timestamp to human readable format
-const formatTimestamp = (timestamp: string | null): string => {
-  if (!timestamp) return '';
-  try {
-    const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return timestamp;
-
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-
-    return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
-  } catch {
-    return timestamp;
-  }
-};
-
 interface PublishStatus {
   stage: PublishStage;
   error: string | null;
@@ -152,8 +157,8 @@ interface PublishStatus {
   pullRequestUrl: string | null;
 }
 
-const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta }) => {
-  const { getActiveDocument, lastSaveTimestamp, deleteDocument, documents, resetStore, updateDocument, isSyncing, syncError, syncOperations } =
+const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta, onAddNewArticle, onSapLogin }) => {
+  const { getActiveDocument, deleteDocument, documents, updateDocument, isSyncing, syncError, syncOperations } =
     usePageDataStore();
   const { token, user } = useAuth();
   const { colorMode } = useColorMode();
@@ -466,18 +471,13 @@ const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta }) => {
       }, 100);
       return () => clearTimeout(timeoutId);
     }
+    return undefined;
   }, [token, loadAssetsForState]);
 
   const breadcrumbPath = useMemo(
     () => buildBreadcrumbPath(activeDocument?.id ?? null, documents),
     [activeDocument, documents]
   );
-
-  const handleContributorsUpdate = (updatedContributors: string[]) => {
-    if (activeDocument) {
-      updateDocument(activeDocument.id, { contributors: updatedContributors });
-    }
-  };
 
   const handleSubmit = async () => {
     setIsLoading(true);
@@ -543,6 +543,25 @@ const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta }) => {
         commitUrl: result.commitUrl,
         pullRequestUrl: result.pullRequestUrl,
       });
+
+      // Cache the new author locally so that subsequent edits in the same local
+      // dev session reflect "in registry" without waiting for the PR to be merged.
+      if (documentObject.newAuthor) {
+        try {
+          localStorage.setItem(
+            `qs_author_${documentObject.newAuthor.username}`,
+            JSON.stringify({
+              name: documentObject.newAuthor.name,
+              title: documentObject.newAuthor.title,
+              linkedin: documentObject.newAuthor.linkedin,
+            }),
+          );
+          // Promote from pending to submitted — clear the pre-fill cache.
+          localStorage.removeItem(`qs_author_pending_${documentObject.newAuthor.username}`);
+        } catch {
+          // localStorage unavailable — no-op
+        }
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
       setPublishStatus({ stage: 'error', error: errorMessage, commitUrl: null, pullRequestUrl: null });
@@ -597,7 +616,7 @@ const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta }) => {
     <EditorContext.Provider value={contextValue}>
       <div className={`${styles.editorPageWrapper} ${colorMode === 'dark' ? styles.darkMode : ''}`}>
         <div className={styles.navColumn}>
-          <PageTabs onAddNew={onAddNew} />
+          <PageTabs onAddNew={onAddNew} onAddNewArticle={onAddNewArticle} onSapLogin={onSapLogin} />
         </div>
         <div className={styles.mainAndTocWrapper}>
           <div className={styles.editorColumn} ref={editorColumnRef}>

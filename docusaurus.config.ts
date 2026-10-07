@@ -8,6 +8,20 @@ require('dotenv').config();
 
 const baseUrl = '/';
 
+// Load the news author registry at build time so the Quick Start article
+// form can pre-fill / skip author collection for already-registered authors.
+const fs = require('fs');
+const path = require('path');
+const yaml = require('js-yaml');
+let articleAuthors: Record<string, unknown> = {};
+try {
+    const authorsYmlPath = path.join(__dirname, 'news', 'authors.yml');
+    articleAuthors = (yaml.load(fs.readFileSync(authorsYmlPath, 'utf-8')) as Record<string, unknown>) ?? {};
+} catch (e) {
+    // Non-fatal: an empty map just means every author will be asked to fill their details.
+    console.warn('Could not load news/authors.yml for article author lookup:', (e as Error).message);
+}
+
 const config: Config = {
     title: 'SAP Architecture Center',
     tagline:
@@ -36,6 +50,7 @@ const config: Config = {
     customFields: {
         backendUrl: process.env.BACKEND_API_URL,
         expressBackendUrl: process.env.EXPRESS_BACKEND_URL,
+        articleAuthors,
         authProviders: {
             '/quick-start': 'github',
         },

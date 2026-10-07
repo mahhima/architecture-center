@@ -9,6 +9,13 @@ export interface PageMetadata {
     authors: string[];
     contributors?: string[];
     description?: string;
+    // Article-only author details, collected in the Create Article form when the
+    // user is not yet registered in news/authors.yml. Ignored for Reference Architectures.
+    authorName?: string;
+    authorTitle?: string;
+    authorLinkedin?: string;
+    // True when the author already exists in news/authors.yml (no upsert needed).
+    authorResolved?: boolean;
 }
 
 export interface Document extends PageMetadata {
@@ -277,6 +284,7 @@ export const usePageDataStore = create<PageDataState>()(
                             tags: doc.tags?.map((t: any) => t.tag?.code).filter(Boolean) || [],
                             isReadOnly: !isAuthor,
                             updatedAt: doc.modifiedAt || doc.createdAt || null,
+                            type: (doc.type as 'ref-arch' | 'article') || undefined,
                         };
                     });
 
@@ -571,6 +579,7 @@ export const usePageDataStore = create<PageDataState>()(
                                 tags: metadata.tags || [],
                                 contributorsUsernames: metadata.contributors || [],
                                 editorState: '',
+                                type: type ?? null,
                             }),
                         }
                     );
@@ -590,9 +599,14 @@ export const usePageDataStore = create<PageDataState>()(
                         description: remoteDoc.description || '',
                         parentId: remoteDoc.parent_ID || null,
                         editorState: remoteDoc.editorState || null,
+                        type,
                         authors: remoteDoc.author ? [remoteDoc.author.username] : metadata.authors,
                         contributors: remoteDoc.contributors?.map((c: any) => c.user?.username).filter(Boolean) || [],
                         tags: remoteDoc.tags?.map((t: any) => t.tag?.code).filter(Boolean) || [],
+                        authorName: metadata.authorName,
+                        authorTitle: metadata.authorTitle,
+                        authorLinkedin: metadata.authorLinkedin,
+                        authorResolved: metadata.authorResolved,
                     };
 
                     set((state) => {
