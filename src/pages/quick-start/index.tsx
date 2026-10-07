@@ -74,6 +74,38 @@ function AuthenticatedQuickStartView() {
                 authorLinkedin: existing.socials?.linkedin,
             };
         }
+        // Fallback: check localStorage for an author cached after a prior local publish.
+        // This lets the "in registry" state reflect immediately in local dev without
+        // waiting for the PR to be merged and authors.yml rebuilt.
+        if (username) {
+            try {
+                const cached = localStorage.getItem(`qs_author_${username}`);
+                if (cached) {
+                    const parsed = JSON.parse(cached) as { name?: string; title?: string; linkedin?: string };
+                    return {
+                        title: '',
+                        authorResolved: true,
+                        authorName: parsed.name,
+                        authorTitle: parsed.title,
+                        authorLinkedin: parsed.linkedin,
+                    };
+                }
+                // Pending cache: filled in but not yet submitted — pre-fill fields but don't show registry strip.
+                const pending = localStorage.getItem(`qs_author_pending_${username}`);
+                if (pending) {
+                    const parsed = JSON.parse(pending) as { name?: string; title?: string; linkedin?: string };
+                    return {
+                        title: '',
+                        authorResolved: false,
+                        authorName: parsed.name,
+                        authorTitle: parsed.title,
+                        authorLinkedin: parsed.linkedin,
+                    };
+                }
+            } catch {
+                // localStorage unavailable — fall through
+            }
+        }
         return { title: '', authorResolved: false };
     }, [users.github, articleAuthors]);
 
@@ -133,18 +165,33 @@ function AuthenticatedQuickStartView() {
     }, [buildInitialArticleData]);
 
     const handleArticleSave = useCallback(() => {
+        const username = users.github?.username;
         if (isArticleEditMode) {
             const activeDoc = getActiveDocument();
             if (activeDoc) {
                 updateDocument(activeDoc.id, {
                     title: articleFormData.title,
                     description: articleFormData.description || '',
-                    // Author details for the news/authors.yml upsert at publish time.
                     authorName: articleFormData.authorName,
                     authorTitle: articleFormData.authorTitle,
                     authorLinkedin: articleFormData.authorLinkedin,
                     authorResolved: articleFormData.authorResolved,
                 });
+            }
+            // Keep the pending cache in sync so new articles pick up the updated details.
+            if (username && articleFormData.authorName && !articleFormData.authorResolved) {
+                try {
+                    localStorage.setItem(
+                        `qs_author_pending_${username}`,
+                        JSON.stringify({
+                            name: articleFormData.authorName,
+                            title: articleFormData.authorTitle,
+                            linkedin: articleFormData.authorLinkedin,
+                        }),
+                    );
+                } catch {
+                    // localStorage unavailable — no-op
+                }
             }
         } else {
             addDocument({
@@ -159,6 +206,24 @@ function AuthenticatedQuickStartView() {
                 authorLinkedin: articleFormData.authorLinkedin,
                 authorResolved: articleFormData.authorResolved,
             }, null, 'article');
+
+            // Cache author details locally so they survive page reloads and
+            // pre-fill subsequent article forms — until the user publishes,
+            // at which point qs_author_<username> takes over.
+            if (username && articleFormData.authorName && !articleFormData.authorResolved) {
+                try {
+                    localStorage.setItem(
+                        `qs_author_pending_${username}`,
+                        JSON.stringify({
+                            name: articleFormData.authorName,
+                            title: articleFormData.authorTitle,
+                            linkedin: articleFormData.authorLinkedin,
+                        }),
+                    );
+                } catch {
+                    // localStorage unavailable — no-op
+                }
+            }
         }
         setIsArticleFormOpen(false);
         setIsArticleEditMode(false);
@@ -193,7 +258,9 @@ function AuthenticatedQuickStartView() {
                 authorName: activeDoc.authorName,
                 authorTitle: activeDoc.authorTitle,
                 authorLinkedin: activeDoc.authorLinkedin,
-                authorResolved: activeDoc.authorResolved,
+                // Re-check the registry live so the "in registry" strip shows
+                // correctly even if the author was added after the doc was created.
+                authorResolved: buildInitialArticleData().authorResolved,
             });
             setIsArticleEditMode(true);
             setIsArticleFormOpen(true);
@@ -209,7 +276,7 @@ function AuthenticatedQuickStartView() {
         });
         setIsEditMode(true);
         setIsModalOpen(true);
-    }, [getActiveDocument]);
+    }, [getActiveDocument, buildInitialArticleData]);
 
     useEffect(() => {
         if (initialized && documents.length === 0) {

@@ -603,6 +603,10 @@ export const usePageDataStore = create<PageDataState>()(
                         authors: remoteDoc.author ? [remoteDoc.author.username] : metadata.authors,
                         contributors: remoteDoc.contributors?.map((c: any) => c.user?.username).filter(Boolean) || [],
                         tags: remoteDoc.tags?.map((t: any) => t.tag?.code).filter(Boolean) || [],
+                        authorName: metadata.authorName,
+                        authorTitle: metadata.authorTitle,
+                        authorLinkedin: metadata.authorLinkedin,
+                        authorResolved: metadata.authorResolved,
                     };
 
                     set((state) => {

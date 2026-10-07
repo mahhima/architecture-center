@@ -543,6 +543,25 @@ const Editor: React.FC<EditorProps> = ({ onAddNew, onEditMeta, onAddNewArticle, 
         commitUrl: result.commitUrl,
         pullRequestUrl: result.pullRequestUrl,
       });
+
+      // Cache the new author locally so that subsequent edits in the same local
+      // dev session reflect "in registry" without waiting for the PR to be merged.
+      if (documentObject.newAuthor) {
+        try {
+          localStorage.setItem(
+            `qs_author_${documentObject.newAuthor.username}`,
+            JSON.stringify({
+              name: documentObject.newAuthor.name,
+              title: documentObject.newAuthor.title,
+              linkedin: documentObject.newAuthor.linkedin,
+            }),
+          );
+          // Promote from pending to submitted — clear the pre-fill cache.
+          localStorage.removeItem(`qs_author_pending_${documentObject.newAuthor.username}`);
+        } catch {
+          // localStorage unavailable — no-op
+        }
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
       setPublishStatus({ stage: 'error', error: errorMessage, commitUrl: null, pullRequestUrl: null });
