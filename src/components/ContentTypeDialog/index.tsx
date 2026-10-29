@@ -35,31 +35,16 @@ export default function ContentTypeDialog({ open, isSapUser, onSelect, onSapLogi
                     </div>
                 </button>
 
-                {isSapUser ? (
-                    <button className={styles.typeCard} onClick={() => onSelect('article')}>
-                        <Icon name="document-text" className={styles.cardIcon} />
-                        <div className={styles.cardTitle}>Article</div>
-                        <div className={styles.cardDescription}>
-                            Share insights, best practices, or technical guides with the community
-                        </div>
-                    </button>
-                ) : (
-                    <button
-                        className={`${styles.typeCard} ${styles.typeCardLocked}`}
-                        onClick={onSapLogin}
-                        title="Login with SAP to access"
-                    >
-                        <div className={styles.lockBadge}>
-                            <Icon name="locked" className={styles.lockIcon} />
-                            <span>Login with SAP to access</span>
-                        </div>
-                        <Icon name="document-text" className={styles.cardIcon} />
-                        <div className={styles.cardTitle}>Article</div>
-                        <div className={styles.cardDescription}>
-                            Share insights, best practices, or technical guides with the community
-                        </div>
-                    </button>
-                )}
+                <button
+                    className={`${styles.typeCard} ${!isSapUser ? styles.typeCardLocked : ''}`}
+                    onClick={() => isSapUser ? onSelect('article') : onSapLogin()}
+                >
+                    <Icon name="document-text" className={styles.cardIcon} />
+                    <div className={styles.cardTitle}>Article</div>
+                    <div className={styles.cardDescription}>
+                        Share insights, best practices, or technical guides with the community
+                    </div>
+                </button>
             </div>
         </Dialog>
     );

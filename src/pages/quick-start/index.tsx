@@ -1,4 +1,4 @@
-import React, { useState, useEffect, JSX, useCallback } from 'react';
+import React, { useState, useEffect, JSX, useCallback, useRef } from 'react';
 import Layout from '@theme/Layout';
 import BrowserOnly from '@docusaurus/BrowserOnly';
 import styles from './index.module.css';
@@ -10,7 +10,7 @@ import ContentTypeDialog, { ContentType } from '@site/src/components/ContentType
 import ArticleFormDialog, { ArticleMetadata } from '@site/src/components/ArticleFormDialog';
 import { useAuth } from '@site/src/context/AuthContext';
 import Header from '@site/src/components/CustomHeader/Header';
-import { BusyIndicator, Button, Card, Dialog, FlexBox, Icon, Text, Title } from '@ui5/webcomponents-react';
+import { Bar, BusyIndicator, Button, Card, Dialog, FlexBox, Icon, Text, Title } from '@ui5/webcomponents-react';
 import useIsMobile from '@site/src/hooks/useIsMobile';
 
 function EditorComponent({ onAddNew, onEditMeta, onAddNewArticle, onSapLogin }: { onAddNew: (parentId?: string | null) => void; onEditMeta?: () => void; onAddNewArticle?: () => void; onSapLogin?: () => void }) {
@@ -42,16 +42,17 @@ function AuthenticatedQuickStartView() {
     const [isContentTypeOpen, setIsContentTypeOpen] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isArticleFormOpen, setIsArticleFormOpen] = useState(false);
+    const [sapOnlyDialogOpen, setSapOnlyDialogOpen] = useState(false);
     const [articleFormData, setArticleFormData] = useState<ArticleMetadata>({ title: '' });
     const [isArticleEditMode, setIsArticleEditMode] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [newDocData, setNewDocData] = useState<PageMetadata>(initialPageData);
     const [currentParentId, setCurrentParentId] = useState<string | null>(null);
-    const { documents, addDocument, setBackendConfig, fetchDocuments, isLoading, isCreating, getActiveDocument, updateDocument } = usePageDataStore();
+    const { documents, addDocument, setBackendConfig, fetchDocuments, isLoading, isCreating, getActiveDocument, updateDocument, syncError } = usePageDataStore();
     const history = useHistory();
     const { siteConfig } = useDocusaurusContext();
     const baseUrl = siteConfig.baseUrl;
-    const { users, token } = useAuth();
+    const { users, token, btpToken } = useAuth();
     const { expressBackendUrl, backendUrl } = siteConfig.customFields as { expressBackendUrl: string; backendUrl: string };
     const isSapUser = users.btp !== null || users.github?.isSapEmployee === true;
     const articleAuthors = (siteConfig.customFields?.articleAuthors ?? {}) as Record<
@@ -59,6 +60,7 @@ function AuthenticatedQuickStartView() {
         { name?: string; title?: string; socials?: { linkedin?: string } }
     >;
     const [initialized, setInitialized] = useState(false);
+    const pendingActionHandledRef = useRef(false);
 
     // Builds the initial Create-Article form state, pre-filling (and locking) author
     // details when the signed-in GitHub user already exists in news/authors.yml.
@@ -111,14 +113,16 @@ function AuthenticatedQuickStartView() {
 
     // Initialize backend config and fetch documents
     useEffect(() => {
-        if (expressBackendUrl && token && !initialized) {
+        if (expressBackendUrl && token) {
             const username = users.github?.username || '';
-            setBackendConfig(expressBackendUrl, token, username);
-            fetchDocuments().then(() => {
-                setInitialized(true);
-            });
+            setBackendConfig(expressBackendUrl, token, username, btpToken);
+            if (!initialized) {
+                fetchDocuments().then(() => {
+                    setInitialized(true);
+                });
+            }
         }
-    }, [expressBackendUrl, token, initialized, setBackendConfig, fetchDocuments, users.github]);
+    }, [expressBackendUrl, token, btpToken, initialized, setBackendConfig, fetchDocuments, users.github]);
 
     const handleAddNew = useCallback((parentId: string | null = null) => {
         const newDocWithAuthor = {
@@ -141,9 +145,36 @@ function AuthenticatedQuickStartView() {
     }, [users.github, documents.length]);
 
     const handleSapLogin = useCallback(() => {
+        sessionStorage.setItem('pendingAction', 'openArticle');
         const originUri = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
         window.location.href = `${backendUrl}/user/login?origin_uri=${originUri}&provider=btp`;
     }, [backendUrl]);
+
+    // One-shot on mount: if the user was sent through BTP SSO to create an article,
+    // open the form now (auth is guaranteed ready — parent guards on !loading).
+    useEffect(() => {
+        const pending = sessionStorage.getItem('pendingAction');
+        if (!pending) return;
+        sessionStorage.removeItem('pendingAction');
+        if (pending === 'openArticle') {
+            pendingActionHandledRef.current = true;
+            if (isSapUser) {
+                setArticleFormData(buildInitialArticleData());
+                setIsArticleEditMode(false);
+                setIsArticleFormOpen(true);
+            } else {
+                setSapOnlyDialogOpen(true);
+            }
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Show SAP-only dialog when the backend rejects an article operation.
+    useEffect(() => {
+        if (syncError === 'SAP_SSO_REQUIRED') {
+            setSapOnlyDialogOpen(true);
+        }
+    }, [syncError]);
 
     const handleContentTypeSelect = useCallback((type: ContentType) => {
         setIsContentTypeOpen(false);
@@ -279,7 +310,7 @@ function AuthenticatedQuickStartView() {
     }, [getActiveDocument, buildInitialArticleData]);
 
     useEffect(() => {
-        if (initialized && documents.length === 0) {
+        if (initialized && documents.length === 0 && !pendingActionHandledRef.current) {
             handleAddNew(null);
         }
     }, [documents.length, handleAddNew, initialized]);
@@ -355,6 +386,17 @@ function AuthenticatedQuickStartView() {
                 onCancel={handleCancel}
                 isEditMode={isEditMode}
             />
+            <Dialog
+                open={sapOnlyDialogOpen}
+                header={<Bar><Title>SAP Employees Only</Title></Bar>}
+                footer={
+                    <Bar endContent={
+                        <Button design="Emphasized" onClick={() => setSapOnlyDialogOpen(false)}>OK</Button>
+                    } />
+                }
+            >
+                <Text style={{ padding: '1rem' }}>Articles are available to SAP employees only.</Text>
+            </Dialog>
             <main className={styles.pageContainer}>
                 <EditorComponent onAddNew={handleAddNew} onEditMeta={handleEditMeta} onAddNewArticle={isSapUser ? handleAddNewArticle : undefined} onSapLogin={handleSapLogin} />
             </main>

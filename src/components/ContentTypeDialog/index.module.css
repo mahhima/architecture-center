@@ -27,12 +27,10 @@
 
 .typeCardLocked {
     opacity: 0.55;
-    cursor: not-allowed;
+    cursor: pointer;
 }
 
 .typeCardLocked:hover {
-    border-color: var(--sapField_BorderColor, #bcc3ca);
-    box-shadow: none;
     opacity: 0.75;
 }
 

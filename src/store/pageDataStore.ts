@@ -47,6 +47,7 @@ interface PageDataState {
     backendUrl: string | null;
     authToken: string | null;
     currentUsername: string | null;
+    sapToken: string | null;
 
     // Getters
     getDocuments: () => Document[];
@@ -63,7 +64,7 @@ interface PageDataState {
     resetStore: () => void;
 
     // Remote sync actions
-    setBackendConfig: (backendUrl: string, authToken: string, username: string) => void;
+    setBackendConfig: (backendUrl: string, authToken: string, username: string, sapToken?: string | null) => void;
     fetchDocuments: () => Promise<void>;
     syncDocument: (id: string) => Promise<void>;
     syncOperations: (documentId: string, operations: Operation[]) => Promise<string | null>;
@@ -162,6 +163,7 @@ export const usePageDataStore = create<PageDataState>()(
             backendUrl: null,
             authToken: null,
             currentUsername: null,
+            sapToken: null,
 
             getDocuments: () => get().documents,
 
@@ -230,9 +232,9 @@ export const usePageDataStore = create<PageDataState>()(
                 });
             },
 
-            setBackendConfig: (backendUrl, authToken, username) => {
+            setBackendConfig: (backendUrl, authToken, username, sapToken?) => {
                 console.log('[PageDataStore] Backend configured:', { backendUrl, hasToken: !!authToken, username });
-                set({ backendUrl, authToken, currentUsername: username });
+                set({ backendUrl, authToken, currentUsername: username, sapToken: sapToken ?? null });
             },
 
             // Fetch all documents from remote
@@ -466,8 +468,10 @@ export const usePageDataStore = create<PageDataState>()(
 
             // Sync operations (delta sync) instead of full state
             syncOperations: async (documentId: string, operations: Operation[]): Promise<string | null> => {
-                const { backendUrl, authToken, syncDocument } = get();
+                const { backendUrl, authToken, sapToken, documents, syncDocument } = get();
                 if (!backendUrl || !authToken || operations.length === 0) return null;
+
+                const docType = documents.find(d => d.id === documentId || d._remoteId === documentId)?.type;
 
                 set({ isSyncing: true });
 
@@ -492,6 +496,7 @@ export const usePageDataStore = create<PageDataState>()(
                             headers: {
                                 'Authorization': `Bearer ${authToken}`,
                                 'Content-Type': 'application/json',
+                                ...(sapToken && docType === 'article' ? { 'x-sap-token': sapToken } : {}),
                             },
                             body: JSON.stringify({
                                 documentId,
@@ -501,7 +506,9 @@ export const usePageDataStore = create<PageDataState>()(
                     );
 
                     if (!response.ok) {
-                        throw new Error('Operations sync failed');
+                        const errorData = await response.json().catch(() => ({}));
+                        const message = errorData.error?.message || 'Operations sync failed';
+                        throw new Error(message);
                     }
 
                     const result = await response.json();
@@ -527,6 +534,10 @@ export const usePageDataStore = create<PageDataState>()(
 
                     return result.lastOpId || null;
                 } catch (error) {
+                    if (error instanceof Error && error.message === 'SAP_SSO_REQUIRED') {
+                        set({ isSyncing: false, syncError: 'SAP_SSO_REQUIRED' });
+                        return null;
+                    }
                     console.warn('Operation sync failed, falling back to full state sync:', error);
                     // Fallback to full state sync
                     await syncDocument(documentId);
@@ -537,7 +548,7 @@ export const usePageDataStore = create<PageDataState>()(
 
             // Create a new document on remote
             createRemoteDocument: async (metadata, parentId = null, type) => {
-                const { backendUrl, authToken, openDocumentIds } = get();
+                const { backendUrl, authToken, sapToken, openDocumentIds } = get();
                 if (!backendUrl || !authToken) {
                     // Fallback to local-only
                     const newDocument: Document = {
@@ -571,6 +582,7 @@ export const usePageDataStore = create<PageDataState>()(
                             headers: {
                                 'Authorization': `Bearer ${authToken}`,
                                 'Content-Type': 'application/json',
+                                ...(sapToken && type === 'article' ? { 'x-sap-token': sapToken } : {}),
                             },
                             body: JSON.stringify({
                                 title: metadata.title,

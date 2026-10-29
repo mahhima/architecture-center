@@ -145,20 +145,11 @@ const PageTabs: React.FC<PageTabsProps> = ({ onAddNew, onAddNewArticle, onSapLog
                 </button>
                 {articlesOpen && (
                     <>
-                        {onAddNewArticle ? (
+                        {(onAddNewArticle || onSapLogin) && (
                             <button
                                 className={styles.newRefArchButton}
-                                onClick={onAddNewArticle}
+                                onClick={onAddNewArticle ?? onSapLogin}
                                 title="Create new Article"
-                            >
-                                <span>New Article</span>
-                                <Plus size={18} />
-                            </button>
-                        ) : (
-                            <button
-                                className={`${styles.newRefArchButton} ${styles.newRefArchButtonLocked}`}
-                                onClick={onSapLogin}
-                                title="Login with SAP to access"
                             >
                                 <span>New Article</span>
                                 <Plus size={18} />

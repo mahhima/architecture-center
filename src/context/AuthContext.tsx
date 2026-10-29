@@ -35,6 +35,7 @@ interface AuthContextType {
     logout: (provider?: 'github' | 'btp' | 'all') => void;
     hasDualLogin: boolean;
     token: string | null;
+    btpToken: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -57,6 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     logout: () => {},
                     hasDualLogin: false,
                     token: null,
+                    btpToken: null,
                 }}
             >
                 {children}
@@ -73,6 +75,7 @@ const AuthLogicProvider = ({ children }: { children: ReactNode }) => {
     const [users, setUsers] = useState<DualAuthUsers>({ github: null, btp: null });
     const [loading, setLoading] = useState(true);
     const [token, setToken] = useState<string | null>(null); // This token is specifically for GitHub
+    const [btpRawToken, setBtpRawToken] = useState<string | null>(null);
     const location = useLocation();
     const history = useHistory();
     const btpLogoutTimerRef = useRef<NodeJS.Timeout | null>(null); // Ref to store the timer ID for BTP
@@ -176,9 +179,11 @@ const AuthLogicProvider = ({ children }: { children: ReactNode }) => {
                                 provider: 'btp',
                                 expiresAt: decodedBtpToken.exp, // Store expiry for BTP user
                             };
+                            setBtpRawToken(authData.token);
                             scheduleBtpTokenExpiryCheck(decodedBtpToken.exp); // Schedule check
                         } else {
                             logger.info('BTP token found but is expired. Clearing BTP auth data.');
+                            setBtpRawToken(null);
                             authStorage.clear();
                         }
                     } else {
@@ -189,11 +194,15 @@ const AuthLogicProvider = ({ children }: { children: ReactNode }) => {
                             email: authData.email,
                             provider: 'btp',
                         };
+                        setBtpRawToken(authData.token);
                     }
                 } catch {
                     logger.error('Invalid BTP token found in authStorage, removing it.');
+                    setBtpRawToken(null);
                     authStorage.clear();
                 }
+            } else {
+                setBtpRawToken(null);
             }
 
             setUsers(newUsers);
@@ -213,6 +222,7 @@ const AuthLogicProvider = ({ children }: { children: ReactNode }) => {
             setUser(null);
             setUsers({ github: null, btp: null });
             setToken(null);
+            setBtpRawToken(null);
             clearAllLogoutTimers();
         } finally {
             setLoading(false);
@@ -248,6 +258,7 @@ const AuthLogicProvider = ({ children }: { children: ReactNode }) => {
 
                 // When BTP token is received, save it with expiry
                 authStorage.save({ token: btpToken });
+                setBtpRawToken(btpToken);
                 try {
                     const BTP_API = siteConfig.customFields.backendUrl as string;
                     const userInfoUrl = new URL(`${BTP_API}/user/getUserInfo`);
@@ -385,7 +396,7 @@ const AuthLogicProvider = ({ children }: { children: ReactNode }) => {
     const hasDualLogin = !!(users.github && users.btp);
 
     return (
-        <AuthContext.Provider value={{ user, users, loading, logout, hasDualLogin, token }}>
+        <AuthContext.Provider value={{ user, users, loading, logout, hasDualLogin, token, btpToken: btpRawToken }}>
             {children}
         </AuthContext.Provider>
     );
