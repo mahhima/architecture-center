@@ -5,6 +5,7 @@
 # Protocols & APIs
 OAuth
 OIDC
+PKCE
 SAML
 SSO
 JWT
@@ -14,8 +15,10 @@ gRPC
 GraphQL
 REST
 RESTful
+OData
 Webhook
 Webhooks
+CloudEvents
 
 # Data engineering
 OLTP
@@ -47,6 +50,10 @@ idempotency
 multitenant
 multitenancy
 multicloud
+multidomain
+hyperscale
+Hyperscaler
+Hyperscalers
 serverless
 microservice
 microservices
@@ -81,15 +88,18 @@ interpretability
 generalizability
 evals
 chunker
-litellm
-smolagents
 scikit
-pydantic
-pyspark
 shap
 AutoML
 MLOps
-xhigh
+
+# Speech / voice AI (terms & latency metrics)
+RNNT
+Endpointing
+SSML
+TTFA
+TTFT
+TTFB
 
 # Data & analytics
 dataframe
@@ -98,11 +108,15 @@ dataproduct
 dataspace
 dataspaces
 lakehouse
+datalake
 geospatial
 geodatabase
 geodatabases
 triplestore
 sparql
+shacl
+obda
+adbc
 nvarchar
 stddev
 writeback
@@ -110,6 +124,7 @@ writebacks
 decisioning
 
 # Architecture & ops
+designtime
 multitier
 failovers
 hadr
@@ -155,12 +170,12 @@ skillsets
 toolsets
 workstream
 workstreams
+Crossboarding
 unsubscription
 abac
 adls
 itsm
 siem
-cuda
 
 # Data protection & compliance (regulations)
 anonymization
@@ -185,8 +200,16 @@ EDIFACT
 FedML
 ondemand
 
-# Misc / foreign-language terms
-Messe
-
 # Named concepts (eponyms)
 Goodhart
+
+# Resilience & messaging QoS (kept in sync with _typos.toml extend-words)
+RTO
+ALO
+
+# CI / developer tooling (open-source tools and organizations)
+reviewdog
+LanguageTool
+actionlint
+lychee
+FSFE

@@ -6,13 +6,27 @@ export type ContentType = 'ref-arch' | 'article';
 
 interface ContentTypeDialogProps {
     open: boolean;
-    isSapUser: boolean;
     onSelect: (type: ContentType) => void;
-    onSapLogin: () => void;
     onCancel: () => void;
+    isArticleLocked?: boolean;
+    onRequestSapLogin?: () => void;
 }
 
-export default function ContentTypeDialog({ open, isSapUser, onSelect, onSapLogin, onCancel }: ContentTypeDialogProps): JSX.Element {
+export default function ContentTypeDialog({
+    open,
+    onSelect,
+    onCancel,
+    isArticleLocked = false,
+    onRequestSapLogin,
+}: ContentTypeDialogProps): JSX.Element {
+    const handleArticleClick = () => {
+        if (isArticleLocked) {
+            onRequestSapLogin?.();
+        } else {
+            onSelect('article');
+        }
+    };
+
     return (
         <Dialog
             open={open}
@@ -34,15 +48,24 @@ export default function ContentTypeDialog({ open, isSapUser, onSelect, onSapLogi
                         A proven blueprint showcasing how SAP offerings come together to deliver business value
                     </div>
                 </button>
-
                 <button
-                    className={`${styles.typeCard} ${!isSapUser ? styles.typeCardLocked : ''}`}
-                    onClick={() => isSapUser ? onSelect('article') : onSapLogin()}
+                    className={styles.typeCard}
+                    onClick={handleArticleClick}
                 >
                     <Icon name="document-text" className={styles.cardIcon} />
                     <div className={styles.cardTitle}>Article</div>
                     <div className={styles.cardDescription}>
-                        Share insights, best practices, or technical guides with the community
+                        {isArticleLocked ? (
+                            <>
+                                <span className={styles.defaultDesc}>Share insights, best practices, or technical guides with the community</span>
+                                <span className={styles.lockedDesc}>
+                                    <Icon name="locked" className={styles.lockIcon} />
+                                    Login using your SAP account.
+                                </span>
+                            </>
+                        ) : (
+                            'Share insights, best practices, or technical guides with the community'
+                        )}
                     </div>
                 </button>
             </div>

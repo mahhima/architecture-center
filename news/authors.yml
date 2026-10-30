@@ -89,3 +89,14 @@ mahhima:
     page: true
     socials:
         github: mahhima
+
+pvn-pavankumar:
+    name: PVN PavanKumar
+    title: Vice President, Office of the CTO, SAP​
+    url: https://github.com/pvnpavankumar
+    image_url: https://github.com/pvnpavankumar.png
+    page: true
+    socials:
+        github: pvnpavankumar
+        linkedin: pavankumarpvn
+        x: _pvn_pavan

@@ -21,7 +21,7 @@ interface AuthUser {
     avatar?: string;
     provider: 'github' | 'btp';
     githubAccessToken?: string;
-    expiresAt?: number; // Add expiresAt for BTP user, if applicable
+    expiresAt?: number;
     isSapEmployee?: boolean;
 }
 interface DualAuthUsers {

@@ -7,10 +7,10 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import { usePageDataStore, PageMetadata } from '@site/src/store/pageDataStore';
 import MetadataFormDialog from '@site/src/components/MetaFormDialog';
 import ContentTypeDialog, { ContentType } from '@site/src/components/ContentTypeDialog';
-import ArticleFormDialog, { ArticleMetadata } from '@site/src/components/ArticleFormDialog';
+import ArticleFormDialog from '@site/src/components/ArticleFormDialog';
 import { useAuth } from '@site/src/context/AuthContext';
 import Header from '@site/src/components/CustomHeader/Header';
-import { Bar, BusyIndicator, Button, Card, Dialog, FlexBox, Icon, Text, Title } from '@ui5/webcomponents-react';
+import { BusyIndicator, Button, Card, Dialog, FlexBox, Icon, Text, Title } from '@ui5/webcomponents-react';
 import useIsMobile from '@site/src/hooks/useIsMobile';
 
 function EditorComponent({ onAddNew, onEditMeta, onAddNewArticle, onSapLogin }: { onAddNew: (parentId?: string | null) => void; onEditMeta?: () => void; onAddNewArticle?: () => void; onSapLogin?: () => void }) {
@@ -41,77 +41,25 @@ const initialPageData: PageMetadata = {
 function AuthenticatedQuickStartView() {
     const [isContentTypeOpen, setIsContentTypeOpen] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isSubPageCreation, setIsSubPageCreation] = useState(false);
     const [isArticleFormOpen, setIsArticleFormOpen] = useState(false);
-    const [sapOnlyDialogOpen, setSapOnlyDialogOpen] = useState(false);
-    const [articleFormData, setArticleFormData] = useState<ArticleMetadata>({ title: '' });
     const [isArticleEditMode, setIsArticleEditMode] = useState(false);
+    const [sapOnlyDialogOpen, setSapOnlyDialogOpen] = useState(false);
+    const [articleFormData, setArticleFormData] = useState<PageMetadata>({ title: '', tags: [], authors: [], contributors: [] });
     const [isEditMode, setIsEditMode] = useState(false);
     const [newDocData, setNewDocData] = useState<PageMetadata>(initialPageData);
     const [currentParentId, setCurrentParentId] = useState<string | null>(null);
-    const { documents, addDocument, setBackendConfig, fetchDocuments, isLoading, isCreating, getActiveDocument, updateDocument, syncError } = usePageDataStore();
+    const { documents, addDocument, addArticle, setBackendConfig, fetchDocuments, isLoading, isCreating, getActiveDocument, updateDocument, openDocument } = usePageDataStore();
+    const activeDocumentId = usePageDataStore((state) => state.activeDocumentId);
     const history = useHistory();
     const { siteConfig } = useDocusaurusContext();
     const baseUrl = siteConfig.baseUrl;
     const { users, token, btpToken } = useAuth();
     const { expressBackendUrl, backendUrl } = siteConfig.customFields as { expressBackendUrl: string; backendUrl: string };
-    const isSapUser = users.btp !== null || users.github?.isSapEmployee === true;
-    const articleAuthors = (siteConfig.customFields?.articleAuthors ?? {}) as Record<
-        string,
-        { name?: string; title?: string; socials?: { linkedin?: string } }
-    >;
     const [initialized, setInitialized] = useState(false);
+    const isSapAuthenticated = users.github?.isSapEmployee === true || users.btp !== null;
     const pendingActionHandledRef = useRef(false);
 
-    // Builds the initial Create-Article form state, pre-filling (and locking) author
-    // details when the signed-in GitHub user already exists in news/authors.yml.
-    const buildInitialArticleData = useCallback((): ArticleMetadata => {
-        const username = users.github?.username;
-        const existing = username ? articleAuthors[username] : undefined;
-        if (existing) {
-            return {
-                title: '',
-                authorResolved: true,
-                authorName: existing.name,
-                authorTitle: existing.title,
-                authorLinkedin: existing.socials?.linkedin,
-            };
-        }
-        // Fallback: check localStorage for an author cached after a prior local publish.
-        // This lets the "in registry" state reflect immediately in local dev without
-        // waiting for the PR to be merged and authors.yml rebuilt.
-        if (username) {
-            try {
-                const cached = localStorage.getItem(`qs_author_${username}`);
-                if (cached) {
-                    const parsed = JSON.parse(cached) as { name?: string; title?: string; linkedin?: string };
-                    return {
-                        title: '',
-                        authorResolved: true,
-                        authorName: parsed.name,
-                        authorTitle: parsed.title,
-                        authorLinkedin: parsed.linkedin,
-                    };
-                }
-                // Pending cache: filled in but not yet submitted — pre-fill fields but don't show registry strip.
-                const pending = localStorage.getItem(`qs_author_pending_${username}`);
-                if (pending) {
-                    const parsed = JSON.parse(pending) as { name?: string; title?: string; linkedin?: string };
-                    return {
-                        title: '',
-                        authorResolved: false,
-                        authorName: parsed.name,
-                        authorTitle: parsed.title,
-                        authorLinkedin: parsed.linkedin,
-                    };
-                }
-            } catch {
-                // localStorage unavailable — fall through
-            }
-        }
-        return { title: '', authorResolved: false };
-    }, [users.github, articleAuthors]);
-
-    // Initialize backend config and fetch documents
     useEffect(() => {
         if (expressBackendUrl && token) {
             const username = users.github?.username || '';
@@ -124,42 +72,29 @@ function AuthenticatedQuickStartView() {
         }
     }, [expressBackendUrl, token, btpToken, initialized, setBackendConfig, fetchDocuments, users.github]);
 
-    const handleAddNew = useCallback((parentId: string | null = null) => {
-        const newDocWithAuthor = {
-            ...initialPageData,
-            authors: users.github ? [users.github.username] : [],
-            contributors: users.github ? [users.github.username] : [],
-        };
-        setNewDocData(newDocWithAuthor);
-        setCurrentParentId(parentId);
-        setIsEditMode(false);
-        // First-time creation (no documents yet) for SAP employees shows the
-        // 2-option chooser (Ref Arch vs Article). Once documents exist, the split
-        // sidebar's dedicated "New Ref Arch" / "New Article" buttons go straight to
-        // their specific form — so this always creates a Reference Architecture.
-        if (parentId === null && documents.length === 0) {
-            setIsContentTypeOpen(true);
-        } else {
-            setIsModalOpen(true);
+    useEffect(() => {
+        if (!initialized) return;
+        if (documents.length === 0) {
+            if (!pendingActionHandledRef.current) {
+                setIsContentTypeOpen(true);
+            }
+            return;
         }
-    }, [users.github, documents.length]);
+        if (activeDocumentId === null) {
+            const firstDoc = documents.find((d) => d.parentId === null && !d.isReadOnly)
+                ?? documents.find((d) => d.parentId === null);
+            if (firstDoc) openDocument(firstDoc.id);
+        }
+    }, [initialized, documents, activeDocumentId, openDocument]);
 
-    const handleSapLogin = useCallback(() => {
-        sessionStorage.setItem('pendingAction', 'openArticle');
-        const originUri = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
-        window.location.href = `${backendUrl}/user/login?origin_uri=${originUri}&provider=btp`;
-    }, [backendUrl]);
-
-    // One-shot on mount: if the user was sent through BTP SSO to create an article,
-    // open the form now (auth is guaranteed ready — parent guards on !loading).
     useEffect(() => {
         const pending = sessionStorage.getItem('pendingAction');
         if (!pending) return;
         sessionStorage.removeItem('pendingAction');
         if (pending === 'openArticle') {
             pendingActionHandledRef.current = true;
-            if (isSapUser) {
-                setArticleFormData(buildInitialArticleData());
+            if (isSapAuthenticated) {
+                setArticleFormData({ title: '', tags: [], authors: [], contributors: [] });
                 setIsArticleEditMode(false);
                 setIsArticleFormOpen(true);
             } else {
@@ -169,151 +104,61 @@ function AuthenticatedQuickStartView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Show SAP-only dialog when the backend rejects an article operation.
-    useEffect(() => {
-        if (syncError === 'SAP_SSO_REQUIRED') {
-            setSapOnlyDialogOpen(true);
+    const handleSapLogin = useCallback(() => {
+        sessionStorage.setItem('pendingAction', 'openArticle');
+        const originUri = encodeURIComponent(`${window.location.origin}${window.location.pathname}`);
+        window.location.href = `${backendUrl}/user/login?origin_uri=${originUri}&provider=btp`;
+    }, [backendUrl]);
+
+    const handleAddNew = useCallback((parentId: string | null = null) => {
+        const newDocWithAuthor = {
+            ...initialPageData,
+            authors: users.github ? [users.github.username] : [],
+            contributors: users.github ? [users.github.username] : [],
+        };
+        setNewDocData(newDocWithAuthor);
+        setCurrentParentId(parentId);
+        setIsEditMode(false);
+        if (parentId !== null) {
+            setIsSubPageCreation(true);
+            const parentDoc = documents.find((d) => d.id === parentId);
+            if (parentDoc?.isArticle) {
+                setArticleFormData({ title: '', tags: [], authors: [], contributors: [] });
+                setIsArticleFormOpen(true);
+            } else {
+                setIsModalOpen(true);
+            }
+        } else {
+            setIsSubPageCreation(false);
+            setIsContentTypeOpen(true);
         }
-    }, [syncError]);
+    }, [users.github, documents]);
 
     const handleContentTypeSelect = useCallback((type: ContentType) => {
         setIsContentTypeOpen(false);
         if (type === 'ref-arch') {
-            setIsModalOpen(true);
-        } else if (type === 'article') {
-            setArticleFormData(buildInitialArticleData());
-            setIsArticleEditMode(false);
-            setIsArticleFormOpen(true);
-        }
-    }, [buildInitialArticleData]);
-
-    // Opens the Article creation form directly (used by the "Article +" button
-    // in the split sidebar).
-    const handleAddNewArticle = useCallback(() => {
-        setArticleFormData(buildInitialArticleData());
-        setIsArticleEditMode(false);
-        setIsArticleFormOpen(true);
-    }, [buildInitialArticleData]);
-
-    const handleArticleSave = useCallback(() => {
-        const username = users.github?.username;
-        if (isArticleEditMode) {
-            const activeDoc = getActiveDocument();
-            if (activeDoc) {
-                updateDocument(activeDoc.id, {
-                    title: articleFormData.title,
-                    description: articleFormData.description || '',
-                    authorName: articleFormData.authorName,
-                    authorTitle: articleFormData.authorTitle,
-                    authorLinkedin: articleFormData.authorLinkedin,
-                    authorResolved: articleFormData.authorResolved,
-                });
-            }
-            // Keep the pending cache in sync so new articles pick up the updated details.
-            if (username && articleFormData.authorName && !articleFormData.authorResolved) {
-                try {
-                    localStorage.setItem(
-                        `qs_author_pending_${username}`,
-                        JSON.stringify({
-                            name: articleFormData.authorName,
-                            title: articleFormData.authorTitle,
-                            linkedin: articleFormData.authorLinkedin,
-                        }),
-                    );
-                } catch {
-                    // localStorage unavailable — no-op
-                }
-            }
-        } else {
-            addDocument({
-                title: articleFormData.title,
-                description: articleFormData.description || '',
-                tags: [],
+            const newDocWithAuthor = {
+                ...initialPageData,
                 authors: users.github ? [users.github.username] : [],
                 contributors: users.github ? [users.github.username] : [],
-                // Author details for the news/authors.yml upsert at publish time.
-                authorName: articleFormData.authorName,
-                authorTitle: articleFormData.authorTitle,
-                authorLinkedin: articleFormData.authorLinkedin,
-                authorResolved: articleFormData.authorResolved,
-            }, null, 'article');
-
-            // Cache author details locally so they survive page reloads and
-            // pre-fill subsequent article forms — until the user publishes,
-            // at which point qs_author_<username> takes over.
-            if (username && articleFormData.authorName && !articleFormData.authorResolved) {
-                try {
-                    localStorage.setItem(
-                        `qs_author_pending_${username}`,
-                        JSON.stringify({
-                            name: articleFormData.authorName,
-                            title: articleFormData.authorTitle,
-                            linkedin: articleFormData.authorLinkedin,
-                        }),
-                    );
-                } catch {
-                    // localStorage unavailable — no-op
-                }
-            }
+            };
+            setNewDocData(newDocWithAuthor);
+            setCurrentParentId(null);
+            setIsEditMode(false);
+            setIsModalOpen(true);
+        } else {
+            setArticleFormData({ title: '', tags: [], authors: [], contributors: [] });
+            setIsArticleFormOpen(true);
         }
-        setIsArticleFormOpen(false);
-        setIsArticleEditMode(false);
-    }, [articleFormData, users.github, addDocument, isArticleEditMode, getActiveDocument, updateDocument]);
-
-    const handleArticleCancel = useCallback(() => {
-        setIsArticleFormOpen(false);
-        setIsArticleEditMode(false);
-        if (documents.length === 0 && isSapUser) {
-            setIsContentTypeOpen(true);
-        } else if (documents.length === 0) {
-            history.push(baseUrl);
-        }
-    }, [documents.length, isSapUser, history, baseUrl]);
+    }, [users.github]);
 
     const handleContentTypeCancel = useCallback(() => {
-        setIsContentTypeOpen(false);
         if (documents.length === 0) {
             history.push(baseUrl);
-        }
-    }, [documents.length, history, baseUrl]);
-
-    const handleEditMeta = useCallback(() => {
-        const activeDoc = getActiveDocument();
-        if (!activeDoc) return;
-
-        // Articles are edited through the Article form, not the RA metadata form.
-        if (activeDoc.type === 'article') {
-            setArticleFormData({
-                title: activeDoc.title,
-                description: activeDoc.description || '',
-                authorName: activeDoc.authorName,
-                authorTitle: activeDoc.authorTitle,
-                authorLinkedin: activeDoc.authorLinkedin,
-                // Re-check the registry live so the "in registry" strip shows
-                // correctly even if the author was added after the doc was created.
-                authorResolved: buildInitialArticleData().authorResolved,
-            });
-            setIsArticleEditMode(true);
-            setIsArticleFormOpen(true);
             return;
         }
-
-        setNewDocData({
-            title: activeDoc.title,
-            tags: activeDoc.tags,
-            authors: activeDoc.authors,
-            contributors: activeDoc.contributors || [],
-            description: activeDoc.description || '',
-        });
-        setIsEditMode(true);
-        setIsModalOpen(true);
-    }, [getActiveDocument, buildInitialArticleData]);
-
-    useEffect(() => {
-        if (initialized && documents.length === 0 && !pendingActionHandledRef.current) {
-            handleAddNew(null);
-        }
-    }, [documents.length, handleAddNew, initialized]);
+        setIsContentTypeOpen(false);
+    }, [history, baseUrl, documents.length]);
 
     const handleCreate = () => {
         if (isEditMode) {
@@ -330,18 +175,89 @@ function AuthenticatedQuickStartView() {
             addDocument(newDocData, currentParentId);
         }
         setIsModalOpen(false);
+        setIsSubPageCreation(false);
     };
 
     const handleCancel = () => {
         setIsModalOpen(false);
-        if (documents.length === 0 && isSapUser) {
+        setIsSubPageCreation(false);
+        if (documents.length === 0) {
             setIsContentTypeOpen(true);
-        } else if (documents.length === 0) {
-            history.push(baseUrl);
         }
     };
 
-    // Show initializing screen only on first load (fetching documents)
+    const handleArticleCreate = useCallback((newAuthor?: { name: string; title: string; linkedin: string }) => {
+        if (newAuthor && users.github?.username) {
+            localStorage.setItem(`author_profile_${users.github.username}`, JSON.stringify(newAuthor));
+        }
+        if (isArticleEditMode) {
+            const activeDoc = getActiveDocument();
+            if (activeDoc) {
+                updateDocument(activeDoc.id, {
+                    title: articleFormData.title,
+                    tags: articleFormData.tags,
+                    description: articleFormData.description,
+                    contributors: articleFormData.contributors,
+                    keywords: articleFormData.keywords,
+                    spotlightImage: articleFormData.spotlightImage,
+                    ...(newAuthor ? { newAuthor } : {}),
+                });
+            }
+        } else {
+            addArticle({
+                title: articleFormData.title,
+                description: articleFormData.description || '',
+                tags: [],
+                keywords: articleFormData.keywords || [],
+                spotlightImage: articleFormData.spotlightImage,
+                authors: users.github ? [users.github.username] : [],
+                contributors: [],
+                ...(newAuthor ? { newAuthor } : {}),
+            });
+        }
+        setIsArticleFormOpen(false);
+        setIsArticleEditMode(false);
+        setIsSubPageCreation(false);
+    }, [articleFormData, users.github, addArticle, isArticleEditMode, getActiveDocument, updateDocument]);
+
+    const handleArticleCancel = useCallback(() => {
+        setIsArticleFormOpen(false);
+        setIsArticleEditMode(false);
+        setIsSubPageCreation(false);
+        if (documents.length === 0) {
+            setIsContentTypeOpen(true);
+        }
+    }, [documents.length]);
+
+    const handleEditMeta = useCallback(() => {
+        const activeDoc = getActiveDocument();
+        if (!activeDoc) return;
+
+        if (activeDoc.isArticle) {
+            setArticleFormData({
+                title: activeDoc.title,
+                tags: activeDoc.tags,
+                authors: activeDoc.authors,
+                contributors: activeDoc.contributors || [],
+                description: activeDoc.description || '',
+                keywords: activeDoc.keywords || [],
+                spotlightImage: activeDoc.spotlightImage,
+            });
+            setIsArticleEditMode(true);
+            setIsArticleFormOpen(true);
+        } else {
+            setNewDocData({
+                title: activeDoc.title,
+                tags: activeDoc.tags,
+                authors: activeDoc.authors,
+                contributors: activeDoc.contributors || [],
+                description: activeDoc.description || '',
+            });
+            setIsEditMode(true);
+            setIsModalOpen(true);
+        }
+    }, [getActiveDocument]);
+
     if (isLoading || !initialized) {
         return (
             <div className={styles.initializingContainer}>
@@ -350,7 +266,6 @@ function AuthenticatedQuickStartView() {
         );
     }
 
-    // Show loader when creating a new ref arch
     if (isCreating) {
         return (
             <div className={styles.initializingContainer}>
@@ -363,20 +278,30 @@ function AuthenticatedQuickStartView() {
         <>
             <ContentTypeDialog
                 open={isContentTypeOpen}
-                isSapUser={isSapUser}
                 onSelect={handleContentTypeSelect}
-                onSapLogin={handleSapLogin}
                 onCancel={handleContentTypeCancel}
+                isArticleLocked={!isSapAuthenticated}
+                onRequestSapLogin={handleSapLogin}
             />
+            <Dialog
+                open={sapOnlyDialogOpen}
+                headerText="SAP account required"
+                footer={<Button design="Emphasized" onClick={() => {
+                    setSapOnlyDialogOpen(false);
+                    if (documents.length === 0) {
+                        setIsContentTypeOpen(true);
+                    }
+                }}>OK</Button>}
+            >
+                <Text>Creating an article requires signing in with your SAP account. Please try again using your SAP credentials.</Text>
+            </Dialog>
             <ArticleFormDialog
                 open={isArticleFormOpen}
                 initialData={articleFormData}
-                authorUsername={users.github?.username}
-                authorAvatar={users.github?.avatar}
-                isEditMode={isArticleEditMode}
                 onDataChange={(updates) => setArticleFormData((prev) => ({ ...prev, ...updates }))}
-                onSave={handleArticleSave}
+                onSave={handleArticleCreate}
                 onCancel={handleArticleCancel}
+                isEditMode={isArticleEditMode}
             />
             <MetadataFormDialog
                 open={isModalOpen}
@@ -386,19 +311,15 @@ function AuthenticatedQuickStartView() {
                 onCancel={handleCancel}
                 isEditMode={isEditMode}
             />
-            <Dialog
-                open={sapOnlyDialogOpen}
-                header={<Bar><Title>SAP Employees Only</Title></Bar>}
-                footer={
-                    <Bar endContent={
-                        <Button design="Emphasized" onClick={() => setSapOnlyDialogOpen(false)}>OK</Button>
-                    } />
+            <main
+                className={styles.pageContainer}
+                style={
+                    isContentTypeOpen || sapOnlyDialogOpen || (!isSubPageCreation && ((isArticleFormOpen && !isArticleEditMode) || (isModalOpen && !isEditMode)))
+                        ? { display: 'none' }
+                        : undefined
                 }
             >
-                <Text style={{ padding: '1rem' }}>Articles are available to SAP employees only.</Text>
-            </Dialog>
-            <main className={styles.pageContainer}>
-                <EditorComponent onAddNew={handleAddNew} onEditMeta={handleEditMeta} onAddNewArticle={isSapUser ? handleAddNewArticle : undefined} onSapLogin={handleSapLogin} />
+                <EditorComponent onAddNew={handleAddNew} onEditMeta={handleEditMeta} />
             </main>
         </>
     );
@@ -427,11 +348,9 @@ function MobileDeviceWarning() {
 
 function GitHubLoginRedirect({ loginUrl }: { loginUrl: string }) {
     useEffect(() => {
-        // Redirect immediately to GitHub login
         window.location.href = loginUrl;
     }, [loginUrl]);
 
-    // Fallback UI while redirecting (or if redirect fails)
     return (
         <Card
             header={

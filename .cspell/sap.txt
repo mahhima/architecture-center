@@ -11,14 +11,12 @@ ABAP
 SAPUI5
 UI5
 Fiori
-OData
 NetWeaver
 ECC
-Hyperscaler
-Hyperscalers
 Kyma
 Gardener
 Steampunk
+Dynpro
 
 # Data & analytics
 Datasphere
@@ -38,13 +36,13 @@ Workzone
 Ariba
 Concur
 SuccessFactors
+BizX
 Signavio
 LeanIX
 Hybris
 Spartacus
 WalkMe
 ByDesign
-Crossboarding
 
 # AI
 Joule
@@ -53,6 +51,7 @@ AAIF
 AICore
 AFLPAL
 JustAsk
+BAIP
 
 # Technical / platform terms
 subaccount
@@ -61,8 +60,8 @@ approuter
 XSUAA
 BTPEA
 CPEA
-designtime
 SAPGUI
+PFCG
 SQLDBC
 BAPI
 IDoc
@@ -71,8 +70,11 @@ matnr
 infotypes
 businesspartner
 rolename
+techuser
+gtid
 HANAML
 HDLFS
+HDLF
 EOIO
 CMIR
 CMIRs
