@@ -71,6 +71,7 @@ interface PageDataState {
     fetchDocuments: () => Promise<void>;
     syncDocument: (id: string) => Promise<void>;
     syncOperations: (documentId: string, operations: Operation[]) => Promise<string | null>;
+    syncArticleOperations: (articleId: string, operations: Operation[]) => Promise<string | null>;
     createRemoteDocument: (metadata: PageMetadata, parentId?: string | null) => Promise<Document | null>;
     createRemoteArticle: (metadata: PageMetadata) => Promise<Document | null>;
     deleteRemoteDocument: (id: string) => Promise<void>;
@@ -447,7 +448,7 @@ export const usePageDataStore = create<PageDataState>()(
 
             // Sync a single document to remote (debounced auto-save)
             syncDocument: async (id: string) => {
-                const { backendUrl, authToken, documents } = get();
+                const { backendUrl, authToken, sapToken, documents } = get();
                 console.log('[PageDataStore] syncDocument called:', { id, hasBackend: !!backendUrl, hasToken: !!authToken });
                 if (!backendUrl || !authToken) return;
 
@@ -474,6 +475,7 @@ export const usePageDataStore = create<PageDataState>()(
                                     headers: {
                                         'Authorization': `Bearer ${authToken}`,
                                         'Content-Type': 'application/json',
+                                        ...(sapToken ? { 'x-sap-token': sapToken } : {}),
                                     },
                                     body: JSON.stringify({
                                         title: doc.title,
@@ -673,6 +675,58 @@ export const usePageDataStore = create<PageDataState>()(
                 }
             },
 
+            syncArticleOperations: async (articleId: string, operations: Operation[]): Promise<string | null> => {
+                const { backendUrl, authToken, sapToken, syncDocument } = get();
+                if (!backendUrl || !authToken || operations.length === 0) return null;
+
+                set({ isSyncing: true });
+
+                try {
+                    const serializedOps = operations.map(op => ({
+                        ...op,
+                        payload: typeof op.payload === 'string' ? op.payload : JSON.stringify(op.payload),
+                    }));
+
+                    const response = await fetch(
+                        `${backendUrl}/quickstart/document-service/syncArticleOperations`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`,
+                                'Content-Type': 'application/json',
+                                ...(sapToken ? { 'x-sap-token': sapToken } : {}),
+                            },
+                            body: JSON.stringify({
+                                articleId,
+                                operations: serializedOps,
+                            }),
+                        }
+                    );
+
+                    if (!response.ok) throw new Error('Article operations sync failed');
+
+                    const result = await response.json();
+
+                    if (result.appliedCount === 0 && operations.length > 0) {
+                        console.warn('[PageDataStore] No article operations applied, falling back to full sync');
+                        throw new Error('No operations applied - backend state may be invalid');
+                    }
+
+                    set({
+                        isSyncing: false,
+                        lastSaveTimestamp: new Date().toLocaleString(),
+                        syncError: null,
+                    });
+
+                    return result.lastOpId || null;
+                } catch (error) {
+                    console.warn('Article operation sync failed, falling back to full state sync:', error);
+                    await syncDocument(articleId);
+                    set({ isSyncing: false });
+                    return null;
+                }
+            },
+
             // Create a new document on remote
             createRemoteDocument: async (metadata, parentId = null) => {
                 const { backendUrl, authToken, openDocumentIds } = get();
@@ -766,7 +820,7 @@ export const usePageDataStore = create<PageDataState>()(
 
             // Create a new article on remote
             createRemoteArticle: async (metadata) => {
-                const { backendUrl, authToken, openDocumentIds } = get();
+                const { backendUrl, authToken, sapToken, openDocumentIds } = get();
                 if (!backendUrl || !authToken) {
                     const newArticle: Document = {
                         ...metadata,
@@ -854,7 +908,7 @@ export const usePageDataStore = create<PageDataState>()(
 
             // Delete document from remote
             deleteRemoteDocument: async (id: string) => {
-                const { backendUrl, authToken, getRootDocumentId } = get();
+                const { backendUrl, authToken, sapToken, getRootDocumentId } = get();
 
                 // Get root ID and isArticle before deletion (state is wiped in the set() below)
                 const rootId = getRootDocumentId(id);
@@ -892,7 +946,10 @@ export const usePageDataStore = create<PageDataState>()(
                             : `${backendUrl}/quickstart/document-service/Documents(${id})`;
                         const response = await fetch(endpoint, {
                             method: 'DELETE',
-                            headers: { 'Authorization': `Bearer ${authToken}` },
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`,
+                                ...(isArticle && sapToken ? { 'x-sap-token': sapToken } : {}),
+                            },
                         });
 
                         if (!response.ok && response.status !== 404) {
