@@ -788,6 +788,7 @@ export const usePageDataStore = create<PageDataState>()(
                 set({ isCreating: true, syncError: null });
 
                 try {
+                    const sapToken = get().sapToken;
                     const response = await fetch(
                         `${backendUrl}/quickstart/document-service/createNewArticle`,
                         {
@@ -795,6 +796,7 @@ export const usePageDataStore = create<PageDataState>()(
                             headers: {
                                 'Authorization': `Bearer ${authToken}`,
                                 'Content-Type': 'application/json',
+                                ...(sapToken ? { 'x-sap-token': sapToken } : {}),
                             },
                             body: JSON.stringify({
                                 title: metadata.title,
